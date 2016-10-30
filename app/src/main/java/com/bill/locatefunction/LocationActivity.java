@@ -37,7 +37,7 @@ import com.amap.api.services.poisearch.PoiSearch;
 import java.util.List;
 
 public class LocationActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnMapLoadedListener,
-        AMap.OnCameraChangeListener, GeocodeSearch.OnGeocodeSearchListener, LocationSource {
+        AMap.OnCameraChangeListener, GeocodeSearch.OnGeocodeSearchListener, LocationSource, PoiSearch.OnPoiSearchListener {
 
     private MapView mapView;
     private AMap aMap;
@@ -46,54 +46,25 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
     private AMapLocationClientOption locationOption;
     private Marker centerMarker;
     private GeocodeSearch geocodeSearch;
+    private PoiSearch.Query query;
 
     private POIEntity poiEntity;
 
-    public void handleSearch(View view){
-        final PoiSearch.Query query = new PoiSearch.Query("","","");
+    public void handleSearch(View view) {
+        // 第一个参数表示搜索字符串，第二个参数表示poi搜索类型，第三个参数表示poi搜索区域（空字符串代表全国
+        query = new PoiSearch.Query("", "", "");
+        // 设置查第一页
         query.setPageNum(0);
+        // 设置每页最多返回多少条poiitem
         query.setPageSize(20);
         Log.d("Bill", poiEntity.latitude + ":" + poiEntity.longitude);
         LatLonPoint latLonPoint = new LatLonPoint(poiEntity.latitude, poiEntity.longitude);
         PoiSearch poiSearch = new PoiSearch(this, query);
+        // 设置搜索区域为以latLonPoint点为圆心，其周围5000米范围
         poiSearch.setBound(new PoiSearch.SearchBound(latLonPoint, 5000, true));
+        // 异步搜索
         poiSearch.searchPOIAsyn();
-        poiSearch.setOnPoiSearchListener(new PoiSearch.OnPoiSearchListener() {
-            @Override
-            public void onPoiSearched(PoiResult poiResult, int rCode) {
-                if (rCode == 1000) {
-                    if (poiResult != null && poiResult.getQuery() != null) {// 搜索poi的结果
-                        if (poiResult.getQuery().equals(query)) {// 是否是同一条
-                            // 取得搜索到的poiitems有多少页
-                            List<PoiItem> poiItems = poiResult.getPois();// 取得第一页的poiitem数据，页数从数字0开始
-                            List<SuggestionCity> suggestionCities = poiResult
-                                    .getSearchSuggestionCitys();// 当搜索不到poiitem数据时，会返回含有搜索关键字的城市信息
-
-                            if (poiItems != null && poiItems.size() > 0) {
-                                for (PoiItem item : poiItems){
-                                    Log.e("Bill", item.getTitle() + ":==:" + item.getSnippet());
-                                }
-                            } else if (suggestionCities != null && suggestionCities.size() > 0) {
-                                for (SuggestionCity city : suggestionCities){
-                                    Log.e("Bill", ":::" + city.getCityName());
-                                }
-                            } else {
-                                Log.e("Bill", "对不起，没有搜索到相关数据！");
-                            }
-                        }
-                    } else {
-                        Log.e("Bill", "对不起，没有搜索到相关数据！");
-                    }
-                } else {
-                    Log.e("Bill", "rCode:" + rCode);
-                }
-            }
-
-            @Override
-            public void onPoiItemSearched(PoiItem poiItem, int i) {
-
-            }
-        });
+        poiSearch.setOnPoiSearchListener(this);
     }
 
     @Override
@@ -292,6 +263,40 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
     @Override
     public void deactivate() {
         locationClient.stopLocation();
+    }
+
+    @Override
+    public void onPoiSearched(PoiResult poiResult, int rCode) {
+        if (rCode == 1000) {
+            if (poiResult != null && poiResult.getQuery() != null) {// 搜索poi的结果
+                if (poiResult.getQuery().equals(query)) {// 是否是同一条
+                    // 取得搜索到的poiitems有多少页
+                    List<PoiItem> poiItems = poiResult.getPois();// 取得第一页的poiitem数据，页数从数字0开始
+                    List<SuggestionCity> suggestionCities = poiResult
+                            .getSearchSuggestionCitys();// 当搜索不到poiitem数据时，会返回含有搜索关键字的城市信息
+                    if (poiItems != null && poiItems.size() > 0) {
+                        for (PoiItem item : poiItems) {
+                            Log.e("Bill", item.getTitle() + ":==:" + item.getSnippet());
+                        }
+                    } else if (suggestionCities != null && suggestionCities.size() > 0) {
+                        for (SuggestionCity city : suggestionCities) {
+                            Log.e("Bill", ":::" + city.getCityName());
+                        }
+                    } else {
+                        Log.e("Bill", "对不起，没有搜索到相关数据！");
+                    }
+                }
+            } else {
+                Log.e("Bill", "对不起，没有搜索到相关数据！");
+            }
+        } else {
+            Log.e("Bill", "rCode:" + rCode);
+        }
+    }
+
+    @Override
+    public void onPoiItemSearched(PoiItem poiItem, int i) {
+
     }
 
     @Override
