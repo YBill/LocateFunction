@@ -3,9 +3,14 @@ package com.bill.locatefunction;
 import android.graphics.Point;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.DefaultItemAnimator;
+import android.support.v7.widget.DividerItemDecoration;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
 import android.view.animation.Interpolator;
+import android.widget.Toast;
 
 import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationClient;
@@ -34,6 +39,7 @@ import com.amap.api.services.geocoder.RegeocodeResult;
 import com.amap.api.services.poisearch.PoiResult;
 import com.amap.api.services.poisearch.PoiSearch;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class LocationActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnMapLoadedListener,
@@ -48,35 +54,36 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
     private GeocodeSearch geocodeSearch;
     private PoiSearch.Query query;
 
-    private POIEntity poiEntity;
-
-    public void handleSearch(View view) {
-        // 第一个参数表示搜索字符串，第二个参数表示poi搜索类型，第三个参数表示poi搜索区域（空字符串代表全国
-        query = new PoiSearch.Query("", "", "");
-        // 设置查第一页
-        query.setPageNum(0);
-        // 设置每页最多返回多少条poiitem
-        query.setPageSize(20);
-        Log.d("Bill", poiEntity.latitude + ":" + poiEntity.longitude);
-        LatLonPoint latLonPoint = new LatLonPoint(poiEntity.latitude, poiEntity.longitude);
-        PoiSearch poiSearch = new PoiSearch(this, query);
-        // 设置搜索区域为以latLonPoint点为圆心，其周围5000米范围
-        poiSearch.setBound(new PoiSearch.SearchBound(latLonPoint, 5000, true));
-        // 异步搜索
-        poiSearch.searchPOIAsyn();
-        poiSearch.setOnPoiSearchListener(this);
-    }
+    private RecyclerView recyclerView;
+    private MoreLocateAdapter adapter;
+    private int currentPage = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_location);
+        initList();
         mapView = (MapView) findViewById(R.id.map_view);
         mapView.onCreate(savedInstanceState);
-        poiEntity = new POIEntity();
 
         initLocation();
         initMaps();
+    }
+
+    private void initList() {
+        recyclerView = (RecyclerView) findViewById(R.id.recycler_view);
+        recyclerView.setMotionEventSplittingEnabled(false);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        adapter = new MoreLocateAdapter(this);
+        recyclerView.setAdapter(adapter);
+        recyclerView.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
+        recyclerView.setItemAnimator(new DefaultItemAnimator());
+        adapter.setOnItemClickLitener(new MoreLocateAdapter.OnItemClickLitener() {
+            @Override
+            public void onItemClick(View view, int position) {
+                toast(":::" + adapter.getItem(position).title);
+            }
+        });
     }
 
     /**
@@ -129,6 +136,31 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         locationClient.setLocationOption(locationOption);
         // 开始定位
 //        locationClient.startLocation();
+    }
+
+    /**
+     * 根据经纬度搜索
+     *
+     * @param longitude
+     * @param latitude
+     */
+    public void searchByLocation(double longitude, double latitude) {
+        // 第一个参数表示搜索字符串
+        // 第二个参数表示POI 类型的组合，比如定义如下组合：餐馆|电影院|景点
+        // 第三个参数表示poi搜索区域（空字符串代表全国)
+        query = new PoiSearch.Query("", "", "");
+        // 设置查第一页
+        query.setPageNum(currentPage);
+        // 设置每页最多返回多少条poiitem
+        query.setPageSize(20);
+        Log.d("Bill", latitude + ":" + longitude);
+        LatLonPoint latLonPoint = new LatLonPoint(latitude, longitude);
+        PoiSearch poiSearch = new PoiSearch(this, query);
+        // 设置搜索区域为以latLonPoint点为圆心，其周围5000米范围
+        poiSearch.setBound(new PoiSearch.SearchBound(latLonPoint, 5000, true));
+        // 异步搜索
+        poiSearch.searchPOIAsyn();
+        poiSearch.setOnPoiSearchListener(this);
     }
 
     /**
@@ -188,6 +220,15 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         return (int) (dpValue * scale + 0.5f);
     }
 
+    private Toast toast;
+    private void toast(String msg) {
+        if (toast == null)
+            toast = Toast.makeText(this, msg, Toast.LENGTH_SHORT);
+        else
+            toast.setText(msg);
+        toast.show();
+    }
+
     /**
      * 定位结果回调
      *
@@ -198,8 +239,6 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         Log.d("Bill", aMapLocation.getLongitude() + ":" + aMapLocation.getLatitude());
         Log.e("Bill", LocationUtils.getLocationStr(aMapLocation));
         locationClient.stopLocation();
-        poiEntity.latitude = aMapLocation.getLatitude();
-        poiEntity.longitude = aMapLocation.getLongitude();
         LatLng latLng = new LatLng(aMapLocation.getLatitude(), aMapLocation.getLongitude());
         aMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f));
     }
@@ -227,8 +266,7 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         // 拖动结束
         startJumpAnimation();
         LatLng latLng = aMap.getCameraPosition().target;
-        poiEntity.latitude = latLng.latitude;
-        poiEntity.longitude = latLng.longitude;
+        searchByLocation(latLng.longitude, latLng.latitude);
         LatLonPoint point = new LatLonPoint(latLng.latitude, latLng.longitude);
         RegeocodeQuery query = new RegeocodeQuery(point, 200, GeocodeSearch.AMAP);
         geocodeSearch.getFromLocationAsyn(query);
@@ -242,7 +280,6 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         // 逆编码
         if (regeocodeResult != null) {
             RegeocodeAddress regeocodeAddress = regeocodeResult.getRegeocodeAddress();
-            poiEntity.address = regeocodeAddress.getFormatAddress();
             Log.d("Bill", "address:" + regeocodeAddress.getFormatAddress());
         }
     }
@@ -270,18 +307,22 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         if (rCode == 1000) {
             if (poiResult != null && poiResult.getQuery() != null) {// 搜索poi的结果
                 if (poiResult.getQuery().equals(query)) {// 是否是同一条
-                    // 取得搜索到的poiitems有多少页
-                    List<PoiItem> poiItems = poiResult.getPois();// 取得第一页的poiitem数据，页数从数字0开始
-                    List<SuggestionCity> suggestionCities = poiResult
-                            .getSearchSuggestionCitys();// 当搜索不到poiitem数据时，会返回含有搜索关键字的城市信息
+                    // 取得第一页的poiitem数据，页数从数字0开始
+                    List<PoiItem> poiItems = poiResult.getPois();
+                    // 当搜索不到poiitem数据时，会返回含有搜索关键字的城市信息
+                    List<SuggestionCity> suggestionCities = poiResult.getSearchSuggestionCitys();
                     if (poiItems != null && poiItems.size() > 0) {
+                        Log.e("Bill", "poiItems size:" + poiItems.size());
+                        List<POIEntity> list = new ArrayList<>();
                         for (PoiItem item : poiItems) {
-                            Log.e("Bill", item.getTitle() + ":==:" + item.getSnippet());
+                            POIEntity entity = new POIEntity();
+                            entity.title = item.getTitle();
+                            entity.content = item.getSnippet();
+                            list.add(entity);
                         }
+                        adapter.setLocateList(list);
                     } else if (suggestionCities != null && suggestionCities.size() > 0) {
-                        for (SuggestionCity city : suggestionCities) {
-                            Log.e("Bill", ":::" + city.getCityName());
-                        }
+                        Log.e("Bill", "suggestionCities size:" + suggestionCities.size());
                     } else {
                         Log.e("Bill", "对不起，没有搜索到相关数据！");
                     }

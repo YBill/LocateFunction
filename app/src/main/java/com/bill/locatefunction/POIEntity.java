@@ -10,4 +10,8 @@ public class POIEntity {
     public double latitude;
     public String address;
 
+    public String title;
+    public String content;
+    public boolean isSelect = false;
+
 }
