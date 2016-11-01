@@ -2,6 +2,7 @@ package com.bill.locatefunction;
 
 import android.content.Context;
 import android.support.v7.widget.RecyclerView;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,10 +41,16 @@ public class MoreLocateAdapter extends RecyclerView.Adapter<MoreLocateAdapter.Lo
     public void onBindViewHolder(final LocateViewHolder holder, int position) {
         POIEntity entity = locateList.get(position);
         holder.titleText.setText(entity.title);
-        holder.contentText.setText(entity.content);
+        if(TextUtils.isEmpty(entity.content)){
+            holder.contentText.setVisibility(View.GONE);
+        } else {
+            holder.contentText.setVisibility(View.VISIBLE);
+            holder.contentText.setText(entity.content);
+        }
         if (entity.isSelect)
             holder.selectView.setVisibility(View.VISIBLE);
-        else holder.selectView.setVisibility(View.GONE);
+        else
+            holder.selectView.setVisibility(View.GONE);
 
         holder.itemView.setOnClickListener(new View.OnClickListener() {
             @Override

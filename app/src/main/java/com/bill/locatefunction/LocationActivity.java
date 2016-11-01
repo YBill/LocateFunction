@@ -54,14 +54,19 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
     private GeocodeSearch geocodeSearch;
     private PoiSearch.Query query;
 
+    private POIEntity poiEntity;
+    private List<POIEntity> poiEntityList = new ArrayList<>();
     private RecyclerView recyclerView;
     private MoreLocateAdapter adapter;
     private int currentPage = 0;
+
+    private boolean isClickItem = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_location);
+        poiEntity = new POIEntity();
         initList();
         mapView = (MapView) findViewById(R.id.map_view);
         mapView.onCreate(savedInstanceState);
@@ -81,7 +86,19 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         adapter.setOnItemClickLitener(new MoreLocateAdapter.OnItemClickLitener() {
             @Override
             public void onItemClick(View view, int position) {
-                toast(":::" + adapter.getItem(position).title);
+                isClickItem = true;
+                moveMap(poiEntityList.get(position).longitude, poiEntityList.get(position).latitude);
+                int tag = 0;
+                for (int i = 0; i < poiEntityList.size(); i++) {
+                    if (poiEntityList.get(i).isSelect) {
+                        tag = i;
+                        break;
+                    }
+                }
+                poiEntityList.get(tag).isSelect = false;
+                poiEntityList.get(position).isSelect = true;
+                adapter.setLocateList(poiEntityList);
+
             }
         });
     }
@@ -152,7 +169,7 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         // 设置查第一页
         query.setPageNum(currentPage);
         // 设置每页最多返回多少条poiitem
-        query.setPageSize(20);
+        query.setPageSize(19);
         Log.d("Bill", latitude + ":" + longitude);
         LatLonPoint latLonPoint = new LatLonPoint(latitude, longitude);
         PoiSearch poiSearch = new PoiSearch(this, query);
@@ -161,6 +178,15 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         // 异步搜索
         poiSearch.searchPOIAsyn();
         poiSearch.setOnPoiSearchListener(this);
+    }
+
+    /**
+     * @param longitude 经度
+     * @param latitude  纬度
+     */
+    private void moveMap(double longitude, double latitude) {
+        LatLng latLng = new LatLng(latitude, longitude);
+        aMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f));
     }
 
     /**
@@ -221,6 +247,7 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
     }
 
     private Toast toast;
+
     private void toast(String msg) {
         if (toast == null)
             toast = Toast.makeText(this, msg, Toast.LENGTH_SHORT);
@@ -239,8 +266,7 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
         Log.d("Bill", aMapLocation.getLongitude() + ":" + aMapLocation.getLatitude());
         Log.e("Bill", LocationUtils.getLocationStr(aMapLocation));
         locationClient.stopLocation();
-        LatLng latLng = new LatLng(aMapLocation.getLatitude(), aMapLocation.getLongitude());
-        aMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f));
+        moveMap(aMapLocation.getLongitude(), aMapLocation.getLatitude());
     }
 
     /**
@@ -264,23 +290,57 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
     @Override
     public void onCameraChangeFinish(CameraPosition cameraPosition) {
         // 拖动结束
-        startJumpAnimation();
-        LatLng latLng = aMap.getCameraPosition().target;
-        searchByLocation(latLng.longitude, latLng.latitude);
-        LatLonPoint point = new LatLonPoint(latLng.latitude, latLng.longitude);
-        RegeocodeQuery query = new RegeocodeQuery(point, 200, GeocodeSearch.AMAP);
-        geocodeSearch.getFromLocationAsyn(query);
+        if (isClickItem) {
+            isClickItem = false;
+        } else {
+            startJumpAnimation();
+            LatLng latLng = aMap.getCameraPosition().target;
+            poiEntity.longitude = latLng.longitude;
+            poiEntity.latitude = latLng.latitude;
+            LatLonPoint point = new LatLonPoint(latLng.latitude, latLng.longitude);
+            RegeocodeQuery query = new RegeocodeQuery(point, 200, GeocodeSearch.AMAP);
+            geocodeSearch.getFromLocationAsyn(query);
+            Log.e("Bill", latLng.longitude + "=----==" + latLng.latitude);
+        }
     }
 
     /**
      *
      */
     @Override
-    public void onRegeocodeSearched(RegeocodeResult regeocodeResult, int i) {
+    public void onRegeocodeSearched(RegeocodeResult regeocodeResult, int rCode) {
         // 逆编码
-        if (regeocodeResult != null) {
-            RegeocodeAddress regeocodeAddress = regeocodeResult.getRegeocodeAddress();
-            Log.d("Bill", "address:" + regeocodeAddress.getFormatAddress());
+        if (rCode == 1000) {
+            if (regeocodeResult != null) {
+                RegeocodeAddress regeocodeAddress = regeocodeResult.getRegeocodeAddress();
+                poiEntity.title = regeocodeAddress.getFormatAddress();
+                poiEntity.isSelect = true;
+                searchByLocation(regeocodeResult.getRegeocodeQuery().getPoint().getLongitude(), regeocodeResult.getRegeocodeQuery().getPoint().getLatitude());
+
+                // 下面的pois固定条数，没发分页
+                /*poiEntityList.clear();
+                POIEntity entity1 = new POIEntity();
+                entity1.isSelect = true;
+                entity1.content = regeocodeAddress.getFormatAddress();
+                entity1.longitude = regeocodeResult.getRegeocodeQuery().getPoint().getLongitude();
+                entity1.latitude = regeocodeResult.getRegeocodeQuery().getPoint().getLatitude();
+                poiEntityList.add(entity1);
+                Log.e("Bill", regeocodeResult.getRegeocodeQuery().getPoint().getLongitude() + "===" + regeocodeResult.getRegeocodeQuery().getPoint().getLatitude());
+
+                List<PoiItem> poiItems = regeocodeAddress.getPois();
+                Log.e("Bill", "size:" + poiItems.size());
+                if (poiItems != null && poiItems.size() > 0) {
+                    for (int i = 0; i < poiItems.size(); i++) {
+                        POIEntity entity = new POIEntity();
+                        entity.title = poiItems.get(i).getTitle();
+                        entity.content = poiItems.get(i).getSnippet();
+                        entity.longitude = poiItems.get(i).getLatLonPoint().getLongitude();
+                        entity.latitude = poiItems.get(i).getLatLonPoint().getLatitude();
+                        poiEntityList.add(entity);
+                    }
+                }
+                adapter.setLocateList(poiEntityList);*/
+            }
         }
     }
 
@@ -311,21 +371,28 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
                     List<PoiItem> poiItems = poiResult.getPois();
                     // 当搜索不到poiitem数据时，会返回含有搜索关键字的城市信息
                     List<SuggestionCity> suggestionCities = poiResult.getSearchSuggestionCitys();
+
+                    poiEntityList.clear();
+                    poiEntityList.add(poiEntity);
+
                     if (poiItems != null && poiItems.size() > 0) {
                         Log.e("Bill", "poiItems size:" + poiItems.size());
-                        List<POIEntity> list = new ArrayList<>();
-                        for (PoiItem item : poiItems) {
-                            POIEntity entity = new POIEntity();
-                            entity.title = item.getTitle();
-                            entity.content = item.getSnippet();
-                            list.add(entity);
+                        if (poiItems != null && poiItems.size() > 0) {
+                            for (int i = 0; i < poiItems.size(); i++) {
+                                POIEntity entity = new POIEntity();
+                                entity.title = poiItems.get(i).getTitle();
+                                entity.content = poiItems.get(i).getSnippet();
+                                entity.longitude = poiItems.get(i).getLatLonPoint().getLongitude();
+                                entity.latitude = poiItems.get(i).getLatLonPoint().getLatitude();
+                                poiEntityList.add(entity);
+                            }
                         }
-                        adapter.setLocateList(list);
                     } else if (suggestionCities != null && suggestionCities.size() > 0) {
                         Log.e("Bill", "suggestionCities size:" + suggestionCities.size());
                     } else {
                         Log.e("Bill", "对不起，没有搜索到相关数据！");
                     }
+                    adapter.setLocateList(poiEntityList);
                 }
             } else {
                 Log.e("Bill", "对不起，没有搜索到相关数据！");
