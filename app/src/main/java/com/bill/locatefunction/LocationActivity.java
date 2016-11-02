@@ -10,6 +10,7 @@ import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
 import android.view.animation.Interpolator;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.amap.api.location.AMapLocation;
@@ -62,11 +63,14 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
 
     private boolean isClickItem = false;
 
+    private ProgressBar progressBar;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_location);
         poiEntity = new POIEntity();
+        progressBar = (ProgressBar) findViewById(R.id.progressBar);
         initList();
         mapView = (MapView) findViewById(R.id.map_view);
         mapView.onCreate(savedInstanceState);
@@ -98,6 +102,31 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
                 poiEntityList.get(tag).isSelect = false;
                 poiEntityList.get(position).isSelect = true;
                 adapter.setLocateList(poiEntityList);
+
+            }
+        });
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                int lastPosition = -1;
+                if(newState == RecyclerView.SCROLL_STATE_IDLE){
+                    RecyclerView.LayoutManager layoutManager = recyclerView.getLayoutManager();
+                    if(layoutManager instanceof LinearLayoutManager){
+                        lastPosition = ((LinearLayoutManager) layoutManager).findLastVisibleItemPosition();
+                    }
+                    if(lastPosition == recyclerView.getLayoutManager().getItemCount()-1){
+//                        toast("滑动到底了");
+                        currentPage++;
+                        searchByLocation(poiEntity.longitude, poiEntity.latitude, currentPage, 20);
+                    }
+                }
+
+            }
+
+            @Override
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
 
             }
         });
@@ -160,16 +189,18 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
      *
      * @param longitude
      * @param latitude
+     * @param cp 当前页数
+     * @param tp 总页数
      */
-    public void searchByLocation(double longitude, double latitude) {
+    public void searchByLocation(double longitude, double latitude, int cp, int tp) {
         // 第一个参数表示搜索字符串
         // 第二个参数表示POI 类型的组合，比如定义如下组合：餐馆|电影院|景点
         // 第三个参数表示poi搜索区域（空字符串代表全国)
         query = new PoiSearch.Query("", "", "");
         // 设置查第一页
-        query.setPageNum(currentPage);
+        query.setPageNum(cp);
         // 设置每页最多返回多少条poiitem
-        query.setPageSize(19);
+        query.setPageSize(tp);
         Log.d("Bill", latitude + ":" + longitude);
         LatLonPoint latLonPoint = new LatLonPoint(latitude, longitude);
         PoiSearch poiSearch = new PoiSearch(this, query);
@@ -315,7 +346,9 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
                 RegeocodeAddress regeocodeAddress = regeocodeResult.getRegeocodeAddress();
                 poiEntity.title = regeocodeAddress.getFormatAddress();
                 poiEntity.isSelect = true;
-                searchByLocation(regeocodeResult.getRegeocodeQuery().getPoint().getLongitude(), regeocodeResult.getRegeocodeQuery().getPoint().getLatitude());
+
+                currentPage = 0;
+                searchByLocation(regeocodeResult.getRegeocodeQuery().getPoint().getLongitude(), regeocodeResult.getRegeocodeQuery().getPoint().getLatitude(), currentPage, 19);
 
                 // 下面的pois固定条数，没发分页
                 /*poiEntityList.clear();
@@ -372,8 +405,10 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
                     // 当搜索不到poiitem数据时，会返回含有搜索关键字的城市信息
                     List<SuggestionCity> suggestionCities = poiResult.getSearchSuggestionCitys();
 
-                    poiEntityList.clear();
-                    poiEntityList.add(poiEntity);
+                    if(currentPage == 0){
+                        poiEntityList.clear();
+                        poiEntityList.add(poiEntity);
+                    }
 
                     if (poiItems != null && poiItems.size() > 0) {
                         Log.e("Bill", "poiItems size:" + poiItems.size());
@@ -393,6 +428,7 @@ public class LocationActivity extends AppCompatActivity implements AMapLocationL
                         Log.e("Bill", "对不起，没有搜索到相关数据！");
                     }
                     adapter.setLocateList(poiEntityList);
+                    progressBar.setVisibility(View.GONE);
                 }
             } else {
                 Log.e("Bill", "对不起，没有搜索到相关数据！");
